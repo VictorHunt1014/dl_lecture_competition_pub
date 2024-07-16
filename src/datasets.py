@@ -63,7 +63,6 @@ class ThingsMEGDataset(Dataset):
         return normalized_data
 
     def augment_data(self, data):
-        # データ拡張手法を実装（例：ランダムノイズ追加、時間シフト）
         if np.random.rand() > 0.5:
             data = data + 0.01 * torch.randn_like(data)
         return data

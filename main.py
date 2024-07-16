@@ -8,6 +8,7 @@ from omegaconf import DictConfig
 import wandb
 from termcolor import cprint
 from tqdm import tqdm
+import pickle
 
 from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
@@ -34,7 +35,7 @@ def run(args: DictConfig):
     test_loader = torch.utils.data.DataLoader(
         test_set, shuffle=False, batch_size=args.batch_size, num_workers=args.num_workers
     )
-    print(f"Shpaes: train {train_set.X.shape}, val {val_set.X.shape}, test {test_set.X.shape}")
+    print(f"Shapes: train {train_set.X.shape}, val {val_set.X.shape}, test {test_set.X.shape}")
 
     # ------------------
     #       Model
@@ -58,6 +59,14 @@ def run(args: DictConfig):
     accuracy = Accuracy(
         task="multiclass", num_classes=train_set.num_classes, top_k=10
     ).to(args.device)
+
+    # Metrics to collect
+    metrics = {
+        'train_loss': [],
+        'val_loss': [],
+        'train_acc': [],
+        'val_acc': []
+    }
       
     for epoch in range(args.epochs):
         print(f"Epoch {epoch+1}/{args.epochs}")
@@ -106,7 +115,18 @@ def run(args: DictConfig):
         new_lr = optimizer.param_groups[0]['lr']
         if old_lr != new_lr:
             cprint(f"Learning rate reduced from {old_lr} to {new_lr}", "yellow")
+        
+        # Save metrics per epoch
+        metrics['train_loss'].append(np.mean(train_loss))
+        metrics['val_loss'].append(np.mean(val_loss))
+        metrics['train_acc'].append(np.mean(train_acc))
+        metrics['val_acc'].append(np.mean(val_acc))
     
+    # Save all metrics after training
+    with open(os.path.join(logdir, 'training_metrics.pkl'), 'wb') as f:
+        pickle.dump(metrics, f)
+    cprint("Training metrics saved.", "green")
+
     # ----------------------------------
     #  Start evaluation with best model
     # ----------------------------------
@@ -120,7 +140,6 @@ def run(args: DictConfig):
     preds = torch.cat(preds, dim=0).numpy()
     np.save(os.path.join(logdir, "submission"), preds)
     cprint(f"Submission {preds.shape} saved at {logdir}", "cyan")
-
 
 if __name__ == "__main__":
     run()
