@@ -1,4 +1,4 @@
-import os, sys
+import os
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -12,7 +12,6 @@ from tqdm import tqdm
 from src.datasets import ThingsMEGDataset
 from src.models import BasicConvClassifier
 from src.utils import set_seed
-
 
 @hydra.main(version_base=None, config_path="configs", config_name="config")
 def run(args: DictConfig):
@@ -35,6 +34,7 @@ def run(args: DictConfig):
     test_loader = torch.utils.data.DataLoader(
         test_set, shuffle=False, batch_size=args.batch_size, num_workers=args.num_workers
     )
+    print(f"Shpaes: train {train_set.X.shape}, val {val_set.X.shape}, test {test_set.X.shape}")
 
     # ------------------
     #       Model
@@ -46,7 +46,10 @@ def run(args: DictConfig):
     # ------------------
     #     Optimizer
     # ------------------
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+
+    # 学習率スケジューラーの設定
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=True)
 
     # ------------------
     #   Start training
@@ -96,7 +99,13 @@ def run(args: DictConfig):
             cprint("New best.", "cyan")
             torch.save(model.state_dict(), os.path.join(logdir, "model_best.pt"))
             max_val_acc = np.mean(val_acc)
-            
+        
+        # スケジューラーのステップと学習率変更の表示
+        old_lr = optimizer.param_groups[0]['lr']
+        scheduler.step(np.mean(val_loss))
+        new_lr = optimizer.param_groups[0]['lr']
+        if old_lr != new_lr:
+            cprint(f"Learning rate reduced from {old_lr} to {new_lr}", "yellow")
     
     # ----------------------------------
     #  Start evaluation with best model
